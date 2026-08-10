@@ -1,16 +1,23 @@
 package com.example.Klein.controller;
 
 import com.example.Klein.dto.request.UserUpdateRequest;
+import com.example.Klein.model.ChannelMusic;
 import com.example.Klein.model.FriendRequest;
 import com.example.Klein.model.User;
+import com.example.Klein.repository.ChannelMusicRepository;
 import com.example.Klein.repository.FriendRequestRepository;
 import com.example.Klein.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import java.util.ArrayList;
-import java.util.List;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+import com.example.Klein.dto.request.ChangePasswordRequest;K
+
+import org.mindrot.jbcrypt.BCrypt;
 
 @RestController
 @RequestMapping("/api/users") // <-- Khớp với đường dẫn Frontend gọi
@@ -59,8 +66,6 @@ public class UserController {
         return userRepo.findById(userId).map(user -> {
             user.setStatus(status); // Cập nhật vào DB
             userRepo.save(user);
-
-            // 🔥 QUAN TRỌNG: Bắn tin qua WebSocket để App cập nhật chấm xanh ngay lập tức
             // Gửi cả ID và Status mới ra kênh công khai "/topic/status"
             messagingTemplate.convertAndSend("/topic/status", user);
 
@@ -85,5 +90,53 @@ public class UserController {
         userRepo.save(user);
 
         return ResponseEntity.ok("Thông tin hồ sơ đã được cập nhật thành công.");
+    }
+
+    @PostMapping("/{userId}/change-password")
+    public ResponseEntity<String> changePassword(@PathVariable Long userId, @RequestBody ChangePasswordRequest request) {
+
+        // 1. Tìm User
+        User user = userRepo.findById(userId).orElse(null);
+
+        if (user == null) {
+            return ResponseEntity.badRequest().body("Lỗi: Không tìm thấy người dùng.");
+        }
+
+        // 2. Xác thực mật khẩu cũ
+        if (!BCrypt.checkpw(request.getOldPassword(), user.getPassword())) {
+            // Trả về lỗi nếu mật khẩu cũ không khớp
+            return ResponseEntity.badRequest().body("Mật khẩu cũ không đúng.");
+        }
+
+        // 3. Mã hóa và cập nhật mật khẩu mới
+        String newHashedPassword = BCrypt.hashpw(request.getNewPassword(), BCrypt.gensalt());
+        user.setPassword(newHashedPassword);
+
+        // 4. Lưu vào Database
+        userRepo.save(user);
+
+        return ResponseEntity.ok("Mật khẩu đã được thay đổi thành công.");
+    }
+    @GetMapping("/search")
+    public ResponseEntity<?> searchUsers(
+            @RequestParam("myId") Long myId,
+            @RequestParam("keyword") String keyword
+    ) {
+        try {
+            List<Object[]> results = userRepo.searchUsersWithMutualCount(myId, keyword);
+
+            List<Map<String, Object>> response = results.stream().map(row -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("id", row[0]);
+                map.put("username", row[1]);
+                map.put("avatarUrl", row[2]);
+                map.put("mutualFriends", row[3]);
+                return map;
+            }).collect(Collectors.toList());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Lỗi Server: " + e.getMessage());
+        }
     }
 }

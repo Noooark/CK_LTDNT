@@ -17,6 +17,9 @@ public class FriendRequest {
 
     @ManyToOne
     private User receiver; // Người nhận lời mời
-    private String status; // PENDING (Chờ), ACCEPTED (Đồng ý)
+    @Enumerated(EnumType.STRING) // Lưu dưới dạng chuỗi "PENDING", "ACCEPTED"... vào DB
+    private RequestStatus status = RequestStatus.PENDING;
+
+
     private LocalDateTime createdAt = LocalDateTime.now();
 }

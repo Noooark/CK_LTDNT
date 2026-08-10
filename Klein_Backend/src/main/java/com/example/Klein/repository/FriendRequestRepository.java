@@ -1,6 +1,7 @@
 package com.example.Klein.repository;
 
 import com.example.Klein.model.FriendRequest;
+import com.example.Klein.model.RequestStatus;
 import com.example.Klein.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -11,13 +12,20 @@ import java.util.List;
 
 @Repository
 public interface FriendRequestRepository extends JpaRepository<FriendRequest, Long> {
-    // 1. Tìm các lời mời đang chờ (đã có từ trước)
-    List<FriendRequest> findByReceiverAndStatus(User receiver, String status);
-    List<FriendRequest> findBySenderAndStatus(User sender, String status);
-    // 2. [MỚI] Tìm tất cả bạn bè đã chấp nhận (Dù mình là người gửi hay người nhận)
-    @Query("SELECT r FROM FriendRequest r WHERE (r.sender.id = :userId OR r.receiver.id = :userId) AND r.status = 'ACCEPTED'")
-    List<FriendRequest> findAllAcceptedFriendships(Long userId);
 
-    @Query("SELECT r FROM FriendRequest r WHERE (r.sender.id = :u1 AND r.receiver.id = :u2) OR (r.sender.id = :u2 AND r.receiver.id = :u1)")
-    FriendRequest findFriendship(@Param("u1") Long user1Id, @Param("u2") Long user2Id);
+    // Kiểm tra tồn tại lời mời với trạng thái cụ thể
+    boolean existsBySenderAndReceiverAndStatus(User sender, User receiver, RequestStatus status);
+
+    // Tìm danh sách theo người gửi/nhận và trạng thái
+    List<FriendRequest> findBySenderAndStatus(User sender, RequestStatus status);
+    List<FriendRequest> findByReceiverAndStatus(User receiver, RequestStatus status);
+
+    // Hàm tìm mối quan hệ bạn bè để hủy kết bạn (đã được ACCEPTED)
+    @Query("SELECT f FROM FriendRequest f WHERE f.status = com.example.Klein.model.RequestStatus.ACCEPTED " +
+            "AND (f.sender.id = :userId OR f.receiver.id = :userId)")
+    List<FriendRequest> findAllAcceptedFriendships(@Param("userId") Long userId);
+
+    @Query("SELECT f FROM FriendRequest f WHERE f.status = com.example.Klein.model.RequestStatus.ACCEPTED " +
+            "AND ((f.sender.id = :u1 AND f.receiver.id = :u2) OR (f.sender.id = :u2 AND f.receiver.id = :u1))")
+    FriendRequest findFriendship(@Param("u1") Long userId, @Param("u2") Long friendId);
 }
